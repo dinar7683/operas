@@ -1,0 +1,678 @@
+АОС ЭКЗ
+
+Доп приколы
+
+Для быстрого получения доступа в интернет на ADMINPC, чтобы
+
+зайти в интернет в свою методичку
+
+RTRL
+
+ vim /etc/net/sysctl.conf
+
+a net.ipv4.ip_forward  1
+
+ cd /etc/net/ifaces
+
+ cp -r ens19/ ens21
+
+ vim ens21/options
+
+a BOOTPROTO=static
+
+ vim ens21/ipv4address
+
+a 20.20.20.1/24
+
+ reboot
+
+ apt-get update && apt-get install nftables -y
+
+ vim /etc/nftables/nftables.nft a в начало:
+
+flush ruleset;
+
+b в конец:
+
+table ip nat {
+
+chain postrouting {
+
+type nat hook postrouting priority 0; oifname ens19 masquerade;
+
+}
+
+}
+
+c вот так:
+
+АОС ЭКЗ
+
+1
+
+
+
+ systemctl enable --now nftables
+
+ nft -f /etc/nftables/nftables.nft ADMINPC
+
+ cd /etc/net/ifaces/ens19
+
+ vim options
+
+a BOOTPROTO=static
+
+ vim ipv4address
+
+a 20.20.20.2.24
+
+ vim ipv4route
+
+a default via 20.20.20.1
+
+ reboot
+
+ в /etc/resolv.conf должен быть указан nameserver 94.232.137.104, если нет его, прописываем в начало файла сами
+
+ все, теперь должен быть интернет, заходите в Firefox на admin-pc и по методичке дальше настриваете
+
+АОС ЭКЗ
+
+2
+
+Конфигурирование RTRL и LSRV с ADMINPC с помощью SSH
+
+подключения (необязательно)
+
+После того, как зашли в интернет на ADMINPC, вы можете пожете
+
+подключиться по SSH с ADMINPC до RTRL, так как ip адреса пока
+
+только на них есть для этого на ADMINPC надо написать ssh user@20.20.20.2, ответить yes, ввести пароль от user - resu, все, вы
+
+зашли на RTRL с консоли ADMINPC, теперь вы можете в браузере
+
+открыть свою методичку, копировать оттуда что надо и вставлять в
+
+консоль, если что в консоли скопировать вставить через Shift Ctrl 
+
+Shift  C и Ctrl  Shift  V. Чтобы с ADMINPC подключиться по ssh до
+
+LSRV, надо настроить dhcp на rtr-l и получить адрес на srv по dhcp.
+
+Экзамен
+
+Делаем последовательно, начиная с RTRL
+
+RTRL
+
+ hostnamectl set-hostname rtr-l.au.team
+
+ vim /etc/net/sysctl.conf
+
+a net.ipv4.ip_forward  1
+
+ cd /etc/net/ifaces
+
+ cp -r ens19/ ens20
+
+ vim ens20/options
+
+a BOOTPROTO=static
+
+ cp -r ens20/ enp0s21
+
+ vim ens20/ipv4address
+
+a 10.10.10.1/24
+
+ vim ens21/ipv4address
+
+a 20.20.20.1/24
+
+ systemctl restart network
+
+ reboot
+
+АОС ЭКЗ
+
+3
+
+
+
+
+
+ apt-get update && apt-get install nftables dhcp-server bind-utils -y
+
+ host youtube.com
+
+ смотрим ip адреса ютуба для написания правил блокировки в
+
+nftables, которые получим, IPv6 адреса не нужно запоминать
+
+ Получили 173.194.220.91 (у вас может быть другой адрес! и еще 3
+
+других адреса, надо для правил в nftables запомнить 173.194.0.0/16, то есть первые два числа
+
+ host www.youtube.com
+
+ Смотрим этот адрес для написания правил блокировки в nftables
+
+ Получили 64.233.161.198 (у вас может быть другой адрес!, надо
+
+для правил в nftables запомнить 64.233.0.0/16, то есть первые два
+
+числа
+
+ vim /etc/nftables/nftables.nft a в начало:
+
+flush ruleset;
+
+b в chain input:
+
+ip saddr 10.10.10.100 icmp type echo-request drop; ip saddr 10.10.10.100 tcp dport 65000 drop; АОС ЭКЗ
+
+4
+
+c в chain forward: ip daddr 64.233.0.0/16 drop; (здесь 64.233.0.0/16 адрес, который
+
+мы запомнили ранее)
+
+ip daddr 173.194.0.0/16 drop; (здесь 173.194.0.0/16 адрес, который
+
+мы запомнили ранее)
+
+d в chain output:
+
+ip daddr 10.10.10.100 icmp type echo-request drop; ip daddr 64.233.0.0/16 drop; (здесь 64.233.0.0/16 адрес, который
+
+мы запомнили ранее)
+
+ip daddr 173.194.0.0/16 drop; (здесь 173.194.0.0/16 адрес, который
+
+мы запомнили ранее)
+
+e в конец:
+
+table ip nat {
+
+chain postrouting {
+
+type nat hook postrouting priority 0; oifname ens19 masquerade;
+
+}
+
+chain prerouting {
+
+type nat hook prerouting priority 0; tcp dport 65000 dnat to 10.10.10.10022;
+
+}
+
+}
+
+f вот так:
+
+АОС ЭКЗ
+
+5
+
+
+
+
+
+ systemctl enable --now nftables
+
+ nft -f /etc/nftables/nftables.nft
+
+ vim /etc/dhcp/dhcpd.conf
+
+a вписываем это:
+
+option subnet-mask 255.255.255.0; option domain-name "au.team"; option domain-name-servers 10.10.10.100; subnet 10.10.10.0 netmask 255.255.255.0 {
+
+range 10.10.10.100 10.10.10.120;
+
+option routers 10.10.10.1;
+
+}
+
+АОС ЭКЗ
+
+6
+
+
+
+
+
+subnet 20.20.20.0 netmask 255.255.255.0 {
+
+range 20.20.20.150 20.20.20.200;
+
+option routers 20.20.20.1;
+
+}
+
+host l-srv {
+
+hardware ethernet (MAC-адрес l-srv см. пункт b); fixed-address 10.10.10.100;
+
+}
+
+b Чтобы узнать MACадрес l-srv, пишем на l-srv команду ip -c a, ищем строку link/ether xx:xx:xx:xx:xx:xx, вот здесь, тут написан
+
+MACадрес, его записываем в hardware ethernet в пункте выше
+
+БЕЗ СКОБОК:
+
+c вот так:
+
+ vim /etc/sysconfig/dhcpd
+
+a DHCPDARGS"ens20 ens21"
+
+ systemctl enable --now dhcpd
+
+АОС ЭКЗ
+
+7
+
+
+
+ vim /etc/openssh/sshd_config
+
+a расскоментируем Port 22
+
+b расскоментируем PasswordAuthentication yes
+
+ systemctl restart sshd
+
+ADMINPC
+
+ hostnamectl set-hostname admin-pc.au.team
+
+ vim /etc/net/ifaces/ens19/options a BOOTPROTO=dhcp
+
+b TYPE=eth
+
+c NM_CONTROLLED=no
+
+d DISABLED=no
+
+e вот так и больше ничего:
+
+ reboot
+
+ Так как DNS на SRV еще не настроили, а интернет нужен, то в
+
+vim /etc/resolv.conf пишем:
+
+a добавить в начало:
+
+nameserver 94.232.137.104
+
+b после того, как мы настроили свой DNS сервер в лице LSRV и
+
+он работает, а именно после 15 пунтка в LSRV, надо в
+
+/etc/resolv.conf указать только domain au.team и nameserver 10.10.10.100, больше ничего.
+
+ Теперь на ADMINPC должен быть выход в интернет, заходим в
+
+Firefox куда надо
+
+АОС ЭКЗ
+
+8
+
+ apt-get update && apt-get install samba-client krb5-kdc task-auth-ad-sssd -y
+
+ После настройки LSRV)
+
+ system-auth write ad au.team admin-pc AU ‘administratorʼ ‘P@ssw0rdʼ
+
+ net ads testjoin
+
+ reboot
+
+ заходим под user пароль resu
+
+ su-
+
+ mkdir /mnt/Adsamba
+
+ vim /etc/fstab
+
+a добавляем в конец:
+
+пишем не через пробел, а через Tab:
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user1.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user2.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user3.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user4.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user5.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user6.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user7.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user8.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user9.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs АОС ЭКЗ
+
+9
+
+user=user10.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user11.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user12.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user13.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user14.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user15.userl,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user1.admin,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user2.admin,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user3.admin,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user4.admin,password=P@ssw0rd,rw 0 0
+
+//l-srv.au.team/public /mnt/Adsamba cifs user=user5.admin,password=P@ssw0rd,rw 0 0
+
+Должно получиться так:
+
+АОС ЭКЗ
+
+10
+
+
+
+
+
+LSRV
+
+ hostnamectl set-hostname l-srv.au.team
+
+ vim /etc/net/ifaces/ens19/options a BOOTPROTO=dhcp
+
+b TYPE=eth
+
+c NM_CONTROLLED=no
+
+d DISABLED=no
+
+e вот так и больше ничего:
+
+ reboot
+
+ vim /etc/resolv.conf
+
+a в начало:
+
+nameserver 94.232.137.104
+
+ apt-get update && apt-get install task-samba-dc krb5-kdc -y АОС ЭКЗ
+
+11
+
+ systemctl stop smb nmb krb5kdc slapd bind dnsmasq
+
+ systemctl disable smb nmb krb5kdc slapd bind dnsmasq
+
+ rm -f /etc/samba/smb.conf
+
+ rm -rf /var/lib/samba
+
+ rm -rf /var/cache/samba
+
+ mkdir -p /var/lib/samba/sysvol
+
+ samba-tool domain provision
+
+a будут вылезать подсказки для настройки домена, нужно
+
+ответить на них вот так:
+
+Realm [AU.TEAM]: //жмем Enter
+
+Domain [AU]: //жмем Enter
+
+Server Role (dc, member, standalone) [dc]: //жмем
+
+Enter
+
+DNS backend (SAMBA_INTERNAL, BIND9_FLATFILE, BIND
+
+9_DLZ, NONE) [SAMBA_INTERNAL]: //жмем Enter DNS forwarder IP address (write 'none' to disable forwarding) [94.232.137.104]: //если в квадратных
+
+скобках не указан 94.232.137.104, то пишем 94.23
+
+2.137.104 и жмем Enter, если уже указан, то прост
+
+о жмем Enter.
+
+Administrator password: //Вводим пароль P@ssw0rd Retype password: //Повторяем пароль P@ssw0rd
+
+ systemctl enable --now samba
+
+ reboot
+
+ cp /var/lib/samba/private/krb5.conf /etc/krb5.conf
+
+ vim /etc/resolv.conf
+
+a должно быть указано только:
+
+domain au.team
+
+nameserver 10.10.10.100
+
+АОС ЭКЗ
+
+12
+
+
+
+
+
+b вот так:
+
+ systemctl restart network
+
+ проверяем (на всякий случай): a samba-tool domain info 10.10.10.100
+
+b kinit administrator
+
+вводим пароль P@ssw0rd
+
+c klist
+
+ for i in 1..15; do samba-tool user create user$i.userl P@ssw0rd; done;
+
+ for i in 1..5; do samba-tool user create user$i.admin P@ssw0rd; done;
+
+ samba-tool group add left
+
+ samba-tool group add admin
+
+АОС ЭКЗ
+
+13
+
+ for i in 1..15; do samba-tool group addmembers left user$i.userl; done;
+
+ for i in 1..5; do samba-tool group addmembers admin user$i.admin; done;
+
+ samba-tool dns zonecreate 10.10.10.100 10.10.10.in-addr.arpa U
+
+administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns zonecreate 10.10.10.100 20.20.20.in-addr.arpa U
+
+administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 au.team admin-pc A 20.20.20.150 U
+
+administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 au.team rtr-l A 20.20.20.1 U
+
+administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 au.team rtr-l A 10.10.10.1 U
+
+administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 10.10.10.in-addr.arpa 1 PTR rtr-l.au.team U administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 10.10.10.in-addr.arpa 100 PTR l-srv.au.team U administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 20.20.20.in-addr.arpa 150 PTR admin-pc.au.team U administrator
+
+a пароль P@ssw0rd
+
+АОС ЭКЗ
+
+14
+
+ samba-tool dns add 10.10.10.100 20.20.20.in-addr.arpa 1 PTR rtr-l.au.team U administrator
+
+a пароль P@ssw0rd
+
+ samba-tool dns add 10.10.10.100 au.team dc CNAME l-srv.au.team U
+
+administrator
+
+a пароль P@ssw0rd
+
+ mkdir /mnt/Adsamba/
+
+ chmod 0777/mnt/Adsamba/
+
+ vim /etc/samba/smb.conf
+
+a добавляем в директиву [global]: idmap-ldb:use rfc2307  yes
+
+b добавляем в конец файла новую директиву [public] и внее
+
+записываем через Tab:
+
+path = /mnt/Adsamba
+
+guest ok = yes
+
+browseable = yes
+
+writable = yes
+
+create mask  0777
+
+directory mask  0777
+
+c вот так должно быть по итогу:
+
+АОС ЭКЗ
+
+15
+
+
+
+
+
+ Теперь, так как мы настроили свой DNS сервер и если он работает
+
+нормально, надо на всех машинах в /etc/resolv.conf указать domain au.team и nameserver 10.10.10.100, больше ничего, вот так: Траблшутинг
+
+ Если есть ping 8.8.8.8, но нет ping ya.ru, то проблема в DNS сервере, заходим в /etc/resolv.conf и добавляем в начало nameserver 94.232.137.104, НО после того, как мы настроили свой DNS сервер в
+
+лице LSRV и он работает нормально, а именно после 15 пунтка в L
+
+SRV, надо в /etc/resolv.conf указать только domain au.team и
+
+nameserver 10.10.10.100, больше ничего.
+
+ Если проблема с Samba на LSRV, просто systemctl disable --now bind и
+
+systemctl restart samba
+
+АОС ЭКЗ
+
+16
+
+ Если host au.team или dig au.team или nslookup au.team не работают, то
+
+указываем в /etc/resolv.conf только domain au.team и nameserver 10.10.10.100, больше ничего.
+
+ Если на LSRV или ADMINPC пропали ip адреса, полученные от dhcp сервера на RTRL, попробуйте systemctl restart network на них, если не
+
+помогло, то на RTRL пишем systemctl restart dhcpd, systemctl status dhcpd, если в статусе dhcp нет ошибок, то переходим опять на LSRV
+
+или ADMINPC, где пропали адреса и заново пишем systemctl restart network.
+
+ Если при настройке домена после команды samba-tool domain provision на LSRV в скобках после Realm написано не au.team, проверьте /etc/hostname, там должно быть l-srv.au.team, если там так, то reboot, если не так, то hostnamectl set-hostname l-srv.au.team и
+
+потом reboot
+
+ Если в /etc/resolv.conf меняется сам по себе и там появляется
+
+nameserver 127.0.0.1 и добавляется еще какой-то option, то пишите
+
+нужные настройки и chattr +i /etc/resolv.conf
+
+ Если на LSRV kinit administrator не работает, то надо на LSRV
+
+написать systemctl disable --now krb5kdc, systemctl stop samba, systemctl start samba, systemctl restart samba, еще надо проверить
+
+systemctl status samba на отсутствие ошибок.
+
+ Если у ADMINPC или LSRV адрес полученный по DHCP не тот, который нужен по таблице, например у ADMINPC 20.20.20.151 или
+
+20.20.20.152, а не 20.20.20.150, то перепроверяем ens19/options на
+
+ADMINPC, делаем systemctl restart network, если все равно такой-же
+
+адрес, то заходим в RTRL, открываем файл vim
+
+/var/lib/dhcp/dhcpd/state/dhcpd.leases и комментируем все записи
+
+lease server-duid не трогаем (см. рисунок ниже), далее systemctl restart dhcp, потом переходим на ADMINPC и пишем systemctl restart network
+
+АОС ЭКЗ
+
+17
+
+
+
+АОС ЭКЗ
+
+18
+
+
+
+
+
